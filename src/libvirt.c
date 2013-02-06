@@ -178,6 +178,24 @@ init_value_list (value_list_t *vl, virDomainPtr dom)
 } /* void init_value_list */
 
 static void
+memory_submit (unsigned long memory, virDomainPtr dom, const char *type)
+{
+    value_t values[1];
+    value_list_t vl = VALUE_LIST_INIT;
+
+    init_value_list (&vl, dom);
+
+    values[0].gauge = memory;
+
+    vl.values = values;
+    vl.values_len = 1;
+
+    sstrncpy (vl.type, type, sizeof (vl.type));
+
+    plugin_dispatch_values (&vl);
+}
+
+static void
 cpu_submit (unsigned long long cpu_time,
             virDomainPtr dom, const char *type)
 {
@@ -445,6 +463,22 @@ lv_read (void)
                     domains[i], vinfo[j].number, "virt_vcpu");
 
         sfree (vinfo);
+    }
+
+    /* Get memory usage for each domain */
+    for (i = 0; i < nr_domains; ++i) {
+        virDomainInfo info;
+	int status;
+
+	status = virDomainGetInfo (domains[i], &info);
+	if (status != 0)
+	{
+            ERROR ("libvirt plugin: virDomainGetInfo failed with status %i.",
+                    status);
+            continue;
+        }
+
+	memory_submit (info.memory, domains[i], "memory");
     }
 
     /* Get block device stats for each domain. */
